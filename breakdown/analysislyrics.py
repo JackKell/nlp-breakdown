@@ -3,8 +3,9 @@ from typing import List
 from pandas import DataFrame
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from breakdown.utility import top_mean_feats
 import pandas
+
+from breakdown.utility import top_mean_feats
 
 
 class TrackDataItem(object):
@@ -50,62 +51,50 @@ def main():
         trackDataItems.append(TrackDataItem(trackId, mxmId, wordCountList, trackLabelMap.get(trackId)))
 
     lyricsList = [trackDataItem.getWordCountListAsString(wordsList) for trackDataItem in trackDataItems]
-
     globalLyricVectorizer = TfidfVectorizer(norm="l2", stop_words="english")
-    sparseTFIDFMatrix = globalLyricVectorizer.fit_transform(lyricsList)
-    # print(globalLyricVectorizer.vocabulary_)
+    x = globalLyricVectorizer.fit_transform(lyricsList)
 
-    denseTFIDFMatrix = sparseTFIDFMatrix.toarray()
+    a = x.toarray()
 
-    topN = 100
-    # print("Top", topN, "most important words")
-    # print(top_mean_feats(sparseTFIDFMatrix, globalLyricVectorizer.get_feature_names(), top_n=topN))
+    topN = 15
+    print("Top", topN, "most important words")
+    print(top_mean_feats(x, globalLyricVectorizer.get_feature_names(), top_n=topN))
 
-    topFeatureLists = []
+    importantFeatures = set()
     for label in labels:
         labledLyricsList = [trackDataItem.getWordCountListAsString(wordsList) for trackDataItem in trackDataItems if
                             trackDataItem.label == label]
         currentVectorizer = TfidfVectorizer(norm="l2", max_features=topN, stop_words="english")
-        sparseTFIDFMatrix = currentVectorizer.fit_transform(labledLyricsList)
-        # print("Top", topN, "most important words for", label)
-        # print(top_mean_feats(sparseTFIDFMatrix, currentVectorizer.get_feature_names(), top_n=topN))
-        # for feature in currentVectorizer.get_feature_names():
-        #     importantFeatures.add(feature)
-        topFeatureLists.append(currentVectorizer.get_feature_names())
+        x = currentVectorizer.fit_transform(labledLyricsList)
+        print("Top", topN, "most important words for", label)
+        print(top_mean_feats(x, currentVectorizer.get_feature_names(), top_n=topN))
+        for feature in currentVectorizer.get_feature_names():
+            importantFeatures.add(feature)
 
-    for i in range(5, 55, 5):
-        importantFeatures = set()
-        for topFeatureList in topFeatureLists:
-            for feature in topFeatureList[:i]:
-                importantFeatures.add(feature)
+    importantFeatures = list(importantFeatures)
+    importantFeatureIndexes = [globalLyricVectorizer.vocabulary_.get(importantFeature) for importantFeature in
+                               importantFeatures]
+    print("Features:\n", importantFeatures)
+    print("Total Features", len(importantFeatures))
 
-        importantFeatures = list(importantFeatures)
-        importantFeatureIndexes = [
-            globalLyricVectorizer.vocabulary_.get(importantFeature) for importantFeature in importantFeatures
-        ]
-        # print(importantFeatures)
-        # print(importantFeatureIndexes)
-        totalFeatures = len(importantFeatures)
-        print("Top:", i, "Total Features:", totalFeatures)
+    tracksDF = DataFrame(
+        [trackDataItem.trackId for trackDataItem in trackDataItems],
+        columns=["trackid"]
+    )
 
-        tracksDF = DataFrame(
-            [trackDataItem.trackId for trackDataItem in trackDataItems],
-            columns=["trackid"]
-        )
+    featuresDF = DataFrame(
+        a[:, importantFeatureIndexes],
+        columns=importantFeatures
+    )
 
-        featuresDF = DataFrame(
-            denseTFIDFMatrix[:, importantFeatureIndexes],
-            columns=importantFeatures
-        )
+    labelDF = DataFrame(
+        [trackDataItem.label for trackDataItem in trackDataItems],
+        columns=["genre"]
+    )
 
-        labelDF = DataFrame(
-            [trackDataItem.label for trackDataItem in trackDataItems],
-            columns=["genre"]
-        )
-
-        labeledDataDF: DataFrame = pandas.concat([tracksDF, featuresDF, labelDF], axis=1)
-        labeledDataDF = labeledDataDF.dropna(axis=0)
-        labeledDataDF.to_csv("../data/processed/fullLabeledDataTop" + str(i) + ".csv")
+    labeledDataDF: DataFrame = pandas.concat([tracksDF, featuresDF, labelDF], axis=1)
+    labeledDataDF = labeledDataDF.dropna(axis=0)
+    labeledDataDF.to_csv("../data/processed/fullLabeledData.csv")
 
 
 if __name__ == '__main__':
